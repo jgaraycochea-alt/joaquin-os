@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="JOS"/>
+<title>Joaquin OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        navy: '#1A2332',
+        'navy2': '#243044',
+        sage: '#4A7C6F',
+        'sage-d': '#3A6358',
+        cream: '#FAF8F5',
+        'cream2': '#F2EFEA',
+        'l-sage': '#EAF2EF',
+        mint: '#D4EDE8',
+        amber: '#FEF9EC',
+        'amber-b': '#F2D98A',
+        ash: '#6B7280',
+      },
+      fontFamily: {
+        sans: ['DM Sans','sans-serif'],
+        display: ['Fraunces','serif'],
+        mono: ['JetBrains Mono','monospace'],
+      }
+    }
+  }
+};
+</script>
+<style>
+  :root {
+    --navy:#1A2332;--navy2:#243044;--sage:#4A7C6F;--sage-d:#3A6358;
+    --cream:#FAF8F5;--cream2:#F2EFEA;--l-sage:#EAF2EF;--mint:#D4EDE8;
+    --amber:#FEF9EC;--amber-b:#F2D98A;--ash:#6B7280;
+  }
+  * { -webkit-tap-highlight-color:transparent; }
+  body { font-family:'DM Sans',sans-serif; background:#FAF8F5; overflow-x:hidden; }
+  .dark body { background:#1A2332; }
+  .font-display { font-family:'Fraunces',serif; }
+  .font-mono { font-family:'JetBrains Mono',monospace; }
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(8px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  .fade-up { animation:fadeUp 350ms ease both; }
+  @keyframes confetti-fall {
+    0%   { transform:translateY(-20px) rotate(0deg); opacity:1; }
+    100% { transform:translateY(100vh) rotate(720deg); opacity:0; }
+  }
+  .confetti-piece {
+    position:fixed; top:-20px; border-radius:2px;
+    animation:confetti-fall 3s ease-in forwards;
+    pointer-events:none; z-index:9999;
+  }
+  @keyframes pulse-ring {
+    0%,100%{transform:scale(1);opacity:1;}
+    50%{transform:scale(1.04);opacity:.85;}
+  }
+  .pulse { animation:pulse-ring 2s ease-in-out infinite; }
+  @keyframes shimmer {
+    0%{background-position:-200% 0}
+    100%{background-position:200% 0}
+  }
+  .shimmer {
+    background:linear-gradient(90deg,transparent 25%,rgba(255,255,255,.1) 50%,transparent 75%);
+    background-size:200% 100%;
+    animation:shimmer 2s infinite;
+  }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+  .no-scrollbar::-webkit-scrollbar { display:none; }
+  .no-scrollbar { -ms-overflow-style:none; scrollbar-width:none; }
+  /* Progress ring */
+  .progress-ring__circle { transition:stroke-dashoffset .6s cubic-bezier(.4,0,.2,1); transform-origin:50% 50%; transform:rotate(-90deg); }
+  /* Swipe delete hint */
+  @keyframes swipe-hint {
+    0%,100%{transform:translateX(0);}
+    30%{transform:translateX(-24px);}
+    60%{transform:translateX(0);}
+  }
+</style>
+</head>
+<body class="min-h-screen">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+// ─── DATA CONSTANTS ───────────────────────────────────────────────────────────
+
+const PLAN_START = new Date('2026-05-19');
+const USER = { name:'Joaquin', weight:93.6, bf:25.5, vf:13.5, height:187, age:24 };
+const CANCUN_DATE = new Date('2026-08-05');
+const MIDGOAL_DATE = new Date('2026-07-15');
+
+const SCHEDULE = {
+  0: { label:'Dom', activity:'gym', extra:'badminton/natación Regatas', gymDay:true },
+  1: { label:'Lun', activity:'gym', extra:'Volleyball indoor 8-10pm', gymDay:true },
+  2: { label:'Mar', activity:'cardio', extra:'Z2 35-40min, FC 120-140', gymDay:false, classNight:true },
+  3: { label:'Mié', activity:'gym', extra:'', gymDay:true, classNight:true },
+  4: { label:'Jue', activity:'cardio', extra:'Z2 35-40min, FC 120-140', gymDay:false, classNight:true },
+  5: { label:'Vie', activity:'gym', extra:'', gymDay:true, classNight:true },
+  6: { label:'Sáb', activity:'cardio', extra:'Beach volleyball 6:30-9:30am', gymDay:false },
+};
+
+const ROUTINES = {
+  A: {
+    name:'Push + Abs', color:'#4A7C6F',
+    blocks:[
+      { name:'Bloque 1', rest:'90s', exercises:[
+        { id:'a1', name:'DB Bench Press', muscle:'Pecho', cue:'Baja 4s controlado, codos 45°', sets:4, reps:'12/10/8/8', weights:['26kg','30kg','33kg'], target:'40-42kg' },
+        { id:'a2', name:'Press Hombro DB Alterno', muscle:'Hombros', cue:'Izq primero, core activo', sets:3, reps:'10/8/8 c/lado', weights:['10kg','12kg','14kg'], target:'18-20kg' },
+        { id:'a3', name:'Fondos lastrados', muscle:'Tríceps', cue:'BW s1-s3, +5kg s4, +8kg s5', sets:4, reps:'max/8/8/6', weights:['BW','BW','BW','+5kg','+8kg'], target:'+15kg' },
+      ]},
+      { name:'Bloque 2 — Superseries', rest:'60s', superset:true, exercises:[
+        { id:'a4a', name:'Pushdown cuerda', muscle:'Tríceps', cue:'Codos fijos al cuerpo', sets:3, reps:'12', weights:['16kg→22kg'], target:'' },
+        { id:'a4b', name:'Elevación lateral', muscle:'Hombros', cue:'Ligeramente hacia adelante', sets:3, reps:'12', weights:['9kg→12kg'], target:'' },
+        { id:'a5a', name:'Calf raise press', muscle:'Pantorrillas', cue:'Rango completo', sets:3, reps:'20', weights:['80kg'], target:'' },
+        { id:'a5b', name:'Face pull', muscle:'Deltoides post.', cue:'Pulgares apuntando atrás', sets:3, reps:'15', weights:['10kg→14kg'], target:'' },
+      ]},
+      { name:'Bloque 3', rest:'90s', exercises:[
+        { id:'a6', name:'Split squat búlgaro', muscle:'Piernas', cue:'Izq primero, torso recto', sets:3, reps:'8/8/8 c/lado', weights:['BW','BW','6kg','10kg'], target:'18-20kg' },
+      ]},
+      { name:'Bloque 4 — Abdomen ⚡', rest:'60s', exercises:[
+        { id:'a7', name:'Cable crunch', muscle:'Abdomen', cue:'Redondea la espalda, no hales con los hombros', sets:3, reps:'15/12/12', weights:['15kg','20kg','23kg'], target:'27kg' },
+        { id:'a8', name:'Colgado elev. piernas', muscle:'Abdomen', cue:'Lento en bajada, núcleo activo', sets:3, reps:'12/10/10', weights:['BW'], target:'+tobilleras s5' },
+        { id:'a9', name:'Plancha + elev. alt.', muscle:'Core', cue:'Caderas estables, no rotar', sets:3, reps:'20s+10 reps', weights:['BW'], target:'+tobillera 2kg s4' },
+      ]},
+    ]
+  },
+  B: {
+    name:'Pull + Bíceps + Core', color:'#3A6358',
+    blocks:[
+      { name:'Bloque 1', rest:'90s', exercises:[
+        { id:'b1', name:'Dominadas', muscle:'Espalda', cue:'Con banda si es necesario, hoy: 3 reps', sets:4, reps:'max', weights:['Banda→BW→lastre'], target:'20 reps' },
+        { id:'b2', name:'Remo Pendlay', muscle:'Espalda', cue:'Espalda paralela al suelo, hala hacia el ombligo', sets:4, reps:'12/10/8/8', weights:['42kg','50kg','55kg'], target:'65-70kg' },
+        { id:'b3', name:'Remo DB un brazo', muscle:'Espalda', cue:'Izq primero, apoya rodilla', sets:3, reps:'12/10/10 c/lado', weights:['L:18kg→22/R:20→24kg'], target:'' },
+      ]},
+      { name:'Bloque 2 — Bíceps', rest:'90s', exercises:[
+        { id:'b4', name:'Curl alterno', muscle:'Bíceps', cue:'Izq primero, no balancear', sets:3, reps:'12/10/10 c/lado', weights:['L:11/R:13kg'], target:'18-20kg' },
+        { id:'b5', name:'Curl inclinado 45°', muscle:'Bíceps', cue:'Codos atrás del cuerpo', sets:3, reps:'12/10/10 c/lado', weights:['10kg','12kg','13kg'], target:'17-18kg' },
+      ]},
+      { name:'Bloque 3', rest:'90s', exercises:[
+        { id:'b6', name:'Romanian Deadlift', muscle:'Isquios/Glúteos', cue:'Bisagra de cadera, rodillas suaves', sets:3, reps:'10/8/8', weights:['15kg DBs','15kg DBs','30kg','40kg'], target:'70-80kg' },
+      ]},
+      { name:'Bloque 4 — Core ⚡', rest:'60s', exercises:[
+        { id:'b7', name:'Pallof press', muscle:'Core', cue:'Izq primero, resistir rotación', sets:3, reps:'12 c/lado', weights:['10kg','12kg','14kg'], target:'' },
+        { id:'b8', name:'Dead bug lento', muscle:'Core', cue:'Espalda pegada al suelo', sets:3, reps:'8 c/lado', weights:['BW'], target:'+plato 1kg s4' },
+        { id:'b9', name:'Plancha lateral + abd.', muscle:'Core', cue:'Izq primero, cadera arriba', sets:3, reps:'30-35s c/lado', weights:['BW'], target:'+tobillera 2kg s5' },
+      ]},
+    ]
+  },
+  C: {
+    name:'Ángulos + Hombro + Piernas', color:'#2D5A4F',
+    blocks:[
+      { name:'Bloque 1', rest:'90s', exercises:[
+        { id:'c1', name:'Press inclinado 30-45°', muscle:'Pecho alto', cue:'Inclinación media, no toques hombros', sets:4, reps:'12/10/8/8', weights:['20kg','22kg','26kg'], target:'32kg' },
+        { id:'c2', name:'Cable fly / Pec deck', muscle:'Pecho', cue:'Pecho estirado en el negativo', sets:3, reps:'15/12/12', weights:['10kg','12kg','15kg'], target:'' },
+        { id:'c3', name:'Rear delt fly', muscle:'Deltoides post.', cue:'Izq primero, codos semiflexos', sets:3, reps:'15/12/12', weights:['8kg','10kg','11kg'], target:'' },
+      ]},
+      { name:'Bloque 2', rest:'60-90s', exercises:[
+        { id:'c4', name:'Arnold press alterno', muscle:'Hombros', cue:'Izq primero, rotación controlada', sets:3, reps:'10/8/8', weights:['12kg','14kg','16kg'], target:'19kg' },
+        { id:'c5', name:'Jalón al pecho', muscle:'Espalda', cue:'Agarre ancho, prona, llevar al pecho', sets:3, reps:'12/10/10', weights:['50kg','55kg','60kg'], target:'70kg' },
+        { id:'c6', name:'Elevación lat. unilateral', muscle:'Hombros', cue:'10 solo Izq + 10 bilateral', sets:3, reps:'10+10', weights:['9kg','10kg','12kg'], target:'' },
+      ]},
+      { name:'Bloque 3', rest:'90s', exercises:[
+        { id:'c7', name:'RDL barra', muscle:'Isquios', cue:'Bisagra, barra cerca del cuerpo', sets:3, reps:'10/8/8', weights:['30kg','40kg','50kg'], target:'80kg' },
+        { id:'c8', name:'Step-up banco alto', muscle:'Piernas', cue:'Izq primero, empuja con talón', sets:2, reps:'10 c/lado', weights:['BW','8kg','12kg'], target:'' },
+      ]},
+      { name:'Bloque 4 — Abdomen ⚡', rest:'60s', exercises:[
+        { id:'c9', name:'Ab wheel rollout', muscle:'Abdomen', cue:'Rango progresivo, no arquearse', sets:3, reps:'8/6/6', weights:['BW'], target:'' },
+        { id:'c10', name:'Bicicleta lenta', muscle:'Abdomen', cue:'Rotación completa, no halar cuello', sets:3, reps:'15/12/12 c/lado', weights:['BW'], target:'' },
+      ]},
+    ]
+  }
+};
+
+const MEALS = {
+  breakfast:{ id:'breakfast', label:'Desayuno', time:'7:30-8:30am', kcal:400, protein:'35-40g',
+    options:[
+      { cat:'Carbohidrato', items:['50g avena + canela + vainilla + banana','Avena con piña','Avena con arándanos'] },
+      { cat:'Proteína (3-4 fuentes)', items:['1 huevo entero','2 claras de huevo','50g pollo cocido','50g pavo','30g queso fresco'] },
+      { cat:'Grasa', items:['1 cda mantequilla de almendras','30g granola con miel','10g maní'] },
+    ]},
+  lunch:{ id:'lunch', label:'Almuerzo', time:'1-2pm', kcal:500, protein:'40g',
+    options:[
+      { cat:'Carbohidrato', items:['55g arroz crudo','150g papa','130g camote','55g pasta cruda','½ taza legumbres'] },
+      { cat:'Proteína', items:['150g pollo cocido','160g pescado cocido','130g carne cocida'] },
+      { cat:'Guisos caseros', items:['Seco/Estofado (pedir más carne, menos arroz)','Pollo c/maní + 40g arroz aparte','Tallarines verdes + 150g pollo encima','Lentejas + 2 huevos encima','Caigua rellena (2) + 40g arroz aparte'] },
+      { cat:'Verduras libres', items:['Rúcula + tomates cherry + vainitas + zanahoria + aceite de oliva'] },
+      { cat:'Postre', items:['Gelatina stevia','1 fruta'] },
+    ]},
+  snack:{ id:'snack', label:'Snack', time:'4-5pm', kcal:225, protein:'28-32g',
+    options:[
+      { cat:'Opciones', items:['A: 120g pollo deshilachado + fruta','B: 3 huevos duros + manzana','C: 30g granola + ½ taza arándanos','Mínimo: 3 huevos duros + 1 fruta'] },
+    ]},
+  dinner:{ id:'dinner', label:'Cena', time:'6:30-7pm (FIJO noches clase)', kcal:400, protein:'35-38g',
+    options:[
+      { cat:'Carbohidrato (reducido)', items:['40g arroz crudo','100g camote','½ taza lentejas'] },
+      { cat:'Proteína (3-4 fuentes)', items:['1 huevo / 2 claras','50g pollo','50g pescado','50g pavo'] },
+      { cat:'Guisos caseros', items:['Lentejas','Tallarines verdes','Caigua rellena'] },
+      { cat:'Siempre', items:['Ensalada libre + gelatina stevia'] },
+    ]},
+};
+
+const MORNING_HABITS = [
+  { id:'wake_early', label:'Despertar 6:30am', gymOnly:true, icon:'alarm' },
+  { id:'agenda', label:'Revisar agenda · clases · pendientes', gymOnly:false, icon:'calendar' },
+  { id:'creatine', label:'Creatina 3-5g con el desayuno', gymOnly:false, icon:'pill' },
+  { id:'maca', label:'Maca · cápsulas con el desayuno', gymOnly:false, icon:'pill' },
+  { id:'skin_am', label:'Skincare AM: limpiador → Vit C → hidratante → SPF', gymOnly:false, icon:'sun' },
+  { id:'tidy_am', label:'Ordenar cuarto · cama hecha · escritorio limpio', gymOnly:false, icon:'home' },
+];
+
+const EVENING_HABITS = [
+  { id:'skin_pm', label:'Skincare PM: limpiador → tónico → retinol → hidratante', gymOnly:false, icon:'moon' },
+  { id:'plan_tomorrow', label:'Preparar mañana · ropa gym + 3 tareas clave', gymOnly:false, icon:'bag' },
+  { id:'no_screens', label:'Sin pantallas 30min antes de dormir', gymOnly:false, icon:'phone_off' },
+  { id:'tidy_pm', label:'Cuarto ordenado para mañana', gymOnly:false, icon:'home' },
+];
+
+const TRACKERS = [
+  { id:'reading', label:'Lectura', unit:'páginas', goal:20, step:1, icon:'book' },
+  { id:'podcast', label:'Podcast/Audio', unit:'min', goal:30, step:5, icon:'headphones' },
+  { id:'study', label:'Estudio/Uni', unit:'min', goal:60, step:15, icon:'study' },
+  { id:'steps', label:'Pasos', unit:'pasos', goal:7000, step:500, icon:'run' },
+];
+
+// ─── UTILITIES ────────────────────────────────────────────────────────────────
+
+const fmt = (d) => {
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+};
+const today = () => fmt(new Date());
+const todayDow = () => new Date().getDay();
+const todayDate = () => new Date();
+
+function daysSincePlan() {
+  const now = new Date(); now.setHours(0,0,0,0);
+  const start = new Date(PLAN_START); start.setHours(0,0,0,0);
+  return Math.floor((now - start) / 86400000);
+}
+
+function getWeekNumber() {
+  const d = daysSincePlan();
+  return Math.floor(d / 7) + 1;
+}
+
+function getGymRotation(dateObj) {
+  const d = new Date(dateObj); d.setHours(0,0,0,0);
+  const start = new Date(PLAN_START); start.setHours(0,0,0,0);
+  const daysSince = Math.floor((d - start) / 86400000);
+  const weekNum = Math.floor(daysSince / 7);
+  const dow = d.getDay(); // 0=Sun,1=Mon,...
+  const gymDays = [0,1,3,5]; // Sun Mon Wed Fri
+  const gymDayIndex = gymDays.indexOf(dow);
+  if (gymDayIndex === -1) return null;
+  const gymCount = weekNum * 4 + gymDayIndex;
+  const routines = ['A','B','C'];
+  return routines[gymCount % 3];
+}
+
+function getTodayActivity(dateObj) {
+  const dow = (dateObj || new Date()).getDay();
+  const sched = SCHEDULE[dow];
+  const isGym = sched.gymDay;
+  const rotation = isGym ? getGymRotation(dateObj || new Date()) : null;
+  return { ...sched, rotation, isGym, isClassNight: !!sched.classNight };
+}
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Buenos días';
+  if (h < 19) return 'Buenas tardes';
+  return 'Buenas noches';
+}
+
+function computeScore(meals, water, habits, training, isGym, isGymDay) {
+  let points = 0, max = 0;
+  ['breakfast','lunch','snack','dinner'].forEach(k => {
+    max++; if (meals[k]) points++;
+  });
+  max += 2; if (training.done) points += 2;
+  const allHabits = [...MORNING_HABITS, ...EVENING_HABITS];
+  allHabits.forEach(h => {
+    if (h.gymOnly && !isGymDay) return;
+    max++; if (habits[h.id]) points++;
+  });
+  max++; if ((water||0) >= 2500) points++;
+  return max === 0 ? 0 : Math.round((points / max) * 100);
+}
+
+function getScoreColor(score) {
+  if (score >= 80) return '#4A7C6F';
+  if (score >= 50) return '#E0B040';
+  return '#C66054';
+}
+
+function formatDate(d) {
+  const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// ─── HOOKS ────────────────────────────────────────────────────────────────────
+
+function useLS(key, def) {
+  const [val, setVal] = useState(() => {
+    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : def; }
+    catch { return def; }
+  });
+  const set = useCallback((v) => {
+    const nv = typeof v === 'function' ? v(val) : v;
+    setVal(nv);
+    try { localStorage.setItem(key, JSON.stringify(nv)); } catch {}
+  }, [key, val]);
+  return [val, set];
+}
+
+function useDailyReset(meals, setMeals, water, setWater, habits, setHabits, training, setTraining, trackers, setTrackers) {
+  const [lastDate, setLastDate] = useLS('lastDate', '');
+  const [history, setHistory] = useLS('history', {});
+
+  useEffect(() => {
+    const t = today();
+    if (lastDate && lastDate !== t) {
+      const snap = { meals, water, habits, training, trackers, date: lastDate };
+      setHistory(h => ({ ...h, [lastDate]: snap }));
+      setMeals({ breakfast:false, lunch:false, snack:false, dinner:false });
+      setWater(0);
+      const nh = {};
+      [...MORNING_HABITS, ...EVENING_HABITS].forEach(h => { nh[h.id] = false; });
+      setHabits(nh);
+      setTraining({ done:false, series:{} });
+      setTrackers({ reading:0, podcast:0, study:0, steps:0 });
+    }
+    if (lastDate !== t) setLastDate(t);
+  }, []);
+
+  return history;
+}
+
+function useHabitStreaks(history) {
+  return useMemo(() => {
+    const streaks = {};
+    const allH = [...MORNING_HABITS, ...EVENING_HABITS];
+    allH.forEach(h => {
+      let streak = 0;
+      const dates = Object.keys(history).sort().reverse();
+      for (const d of dates) {
+        if (history[d]?.habits?.[h.id]) streak++;
+        else break;
+      }
+      streaks[h.id] = streak;
+    });
+    return streaks;
+  }, [history]);
+}
+
+// ─── CONFETTI ─────────────────────────────────────────────────────────────────
+
+function Confetti({ active }) {
+  if (!active) return null;
+  const pieces = Array.from({length:80}, (_,i) => ({
+    id:i,
+    left: Math.random()*100,
+    delay: Math.random()*1.5,
+    duration: 2.5 + Math.random()*1.5,
+    color: ['#4A7C6F','#F2D98A','#D4EDE8','#1A2332','#E07040','#A3D4C8','#FFD700'][Math.floor(Math.random()*7)],
+    size: 6 + Math.random()*8,
+    rotation: Math.random()*360,
+  }));
+  return (
+    <div className="fixed inset-0 pointer-events-none z-50">
+      {pieces.map(p => (
+        <div key={p.id} className="confetti-piece" style={{
+          left:`${p.left}%`, width:p.size, height:p.size*0.6, background:p.color,
+          animationDelay:`${p.delay}s`, animationDuration:`${p.duration}s`,
+          transform:`rotate(${p.rotation}deg)`
+        }}/>
+      ))}
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
+        <div className="font-display text-3xl text-navy dark:text-cream font-bold bg-white dark:bg-navy2 px-6 py-4 rounded-2xl shadow-2xl">
+          🏆 Día perfecto, Joaquin!
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SVG ICONS ────────────────────────────────────────────────────────────────
+
+function Icon({ name, size=20, stroke='currentColor', fill='none', className='' }) {
+  const s = { width:size, height:size, strokeWidth:1.8, stroke, fill, strokeLinecap:'round', strokeLinejoin:'round' };
+  const icons = {
+    dumbbell: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M6 4h2v16H6zM16 4h2v16h-2z"/><rect x="3" y="7" width="3" height="10" rx="1"/><rect x="18" y="7" width="3" height="10" rx="1"/><line x1="8" y1="12" x2="16" y2="12"/></svg>,
+    run: <svg {...s} viewBox="0 0 24 24" className={className}><circle cx="12" cy="4" r="2"/><path d="m6.5 17 3-5 2 3 2-4 3 6M4 13l3-3 2 2 3-4"/></svg>,
+    volleyball: <svg {...s} viewBox="0 0 24 24" className={className}><circle cx="12" cy="12" r="9"/><path d="M12 3c2 4 1 8-2 11M12 3c-2 4-1 8 2 11M3 9h5M16 9h5"/></svg>,
+    rest: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+    alarm: <svg {...s} viewBox="0 0 24 24" className={className}><circle cx="12" cy="13" r="7"/><polyline points="12 10 12 13 14 15"/><path d="m16.44 5.56 1.06-1.06M6.5 6.5 5.44 5.44M1 9l2-2M23 9l-2-2"/></svg>,
+    calendar: <svg {...s} viewBox="0 0 24 24" className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+    pill: <svg {...s} viewBox="0 0 24 24" className={className}><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg>,
+    sun: <svg {...s} viewBox="0 0 24 24" className={className}><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.22" y1="4.22" x2="7.05" y2="7.05"/><line x1="16.95" y1="16.95" x2="19.78" y2="19.78"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.22" y1="19.78" x2="7.05" y2="16.95"/><line x1="16.95" y1="7.05" x2="19.78" y2="4.22"/></svg>,
+    home: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+    moon: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
+    bag: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>,
+    phone_off: <svg {...s} viewBox="0 0 24 24" className={className}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.5 16.5 19 19a2 2 0 0 1-2.73.55L14 18a2 2 0 0 1-.7-1.3l-.26-2.36M9.7 9.7 7 6.27a2 2 0 0 1 .55-2.73L10 2a2 2 0 0 1 2.73.55L14 5a2 2 0 0 1 .3 1.7"/></svg>,
+    drop: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>,
+    plus: <svg {...s} viewBox="0 0 24 24" className={className}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+    minus: <svg {...s} viewBox="0 0 24 24" className={className}><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+    check: <svg {...s} viewBox="0 0 24 24" className={className}><polyline points="20 6 9 17 4 12"/></svg>,
+    chev_right: <svg {...s} viewBox="0 0 24 24" className={className}><polyline points="9 18 15 12 9 6"/></svg>,
+    chev_down: <svg {...s} viewBox="0 0 24 24" className={className}><polyline points="6 9 12 15 18 9"/></svg>,
+    chev_up: <svg {...s} viewBox="0 0 24 24" className={className}><polyline points="18 15 12 9 6 15"/></svg>,
+    flame: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>,
+    scale: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M12 3v3M3 9l9 6 9-6M3 9v9l9 6 9-6V9"/></svg>,
+    trophy: <svg {...s} viewBox="0 0 24 24" className={className}><polyline points="8 7 2 7 2 3 22 3 22 7 16 7"/><path d="M7 7v5a5 5 0 0 0 10 0V7"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/></svg>,
+    today: <svg {...s} viewBox="0 0 24 24" className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><rect x="8" y="14" width="3" height="3" rx=".5"/></svg>,
+    spark: <svg {...s} viewBox="0 0 24 24" className={className}><path d="m12 3-1.9 5.8L4.2 9l5 4-1.9 6.8 5-4 5 4-1.9-6.8 5-4-5.9-.2z"/></svg>,
+    list: <svg {...s} viewBox="0 0 24 24" className={className}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
+    chart: <svg {...s} viewBox="0 0 24 24" className={className}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+    book: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+    trash: <svg {...s} viewBox="0 0 24 24" className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+    pin: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>,
+    filter: <svg {...s} viewBox="0 0 24 24" className={className}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
+    camera: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>,
+    dark: <svg {...s} viewBox="0 0 24 24" className={className}><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
+    headphones: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>,
+    study: <svg {...s} viewBox="0 0 24 24" className={className}><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>,
+    x: <svg {...s} viewBox="0 0 24 24" className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  };
+  return icons[name] || <svg {...s} viewBox="0 0 24 24" className={className}><circle cx="12" cy="12" r="5"/></svg>;
+}
+
+// ─── ATOM COMPONENTS ──────────────────────────────────────────────────────────
+
+function Card({ children, className='', dark=false, onClick }) {
+  const base = dark
+    ? 'bg-navy text-cream rounded-2xl p-4 shadow-lg'
+    : 'bg-cream2 dark:bg-navy2 text-navy dark:text-cream rounded-2xl p-4 shadow-sm';
+  return <div className={`${base} ${className}`} onClick={onClick}>{children}</div>;
+}
+
+function Pill({ label, color='sage', size='sm' }) {
+  const colors = {
+    sage:'bg-l-sage text-sage-d', amber:'bg-amber text-yellow-700',
+    red:'bg-red-50 text-red-700', navy:'bg-navy text-cream',
+    mint:'bg-mint text-sage-d', gray:'bg-gray-100 dark:bg-gray-700 text-ash dark:text-gray-300',
+  };
+  const sz = size==='sm' ? 'text-xs px-2 py-0.5 rounded-full font-medium' : 'text-xs px-3 py-1 rounded-full font-semibold';
+  return <span className={`${colors[color]||colors.sage} ${sz} inline-block`}>{label}</span>;
+}
+
+function ProgressBar({ value, max, color='#4A7C6F', height=8, className='' }) {
+  const pct = Math.min(100, Math.round((value/max)*100));
+  return (
+    <div className={`bg-gray-100 dark:bg-navy rounded-full overflow-hidden ${className}`} style={{height}}>
+      <div className="h-full rounded-full transition-all duration-500" style={{width:`${pct}%`,background:color}}/>
+    </div>
+  );
+}
+
+function CheckItem({ label, checked, onToggle, className='', sub }) {
+  return (
+    <div className={`flex items-center gap-3 py-3 border-b border-gray-100 dark:border-navy last:border-0 cursor-pointer select-none ${className}`} onClick={onToggle}>
+      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 ${checked ? 'bg-sage border-sage' : 'border-gray-300 dark:border-gray-600'}`}>
+        {checked && <Icon name="check" size={12} stroke="white"/>}
+      </div>
+      <div className="flex-1 min-w-0">
+        <span className={`text-sm font-medium ${checked ? 'line-through text-ash' : 'text-navy dark:text-cream'}`}>{label}</span>
+        {sub && <p className="text-xs text-ash mt-0.5">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+function BannerWarn({ icon, text, color='amber', className='' }) {
+  const colors = { amber:'bg-amber border-amber-b text-yellow-800', green:'bg-l-sage border-mint text-sage-d', red:'bg-red-50 border-red-200 text-red-700' };
+  return (
+    <div className={`flex items-center gap-2 p-3 rounded-xl border ${colors[color]} ${className}`}>
+      <Icon name={icon} size={16} stroke="currentColor"/>
+      <span className="text-xs font-medium">{text}</span>
+    </div>
+  );
+}
+
+// ─── SCORE RING ───────────────────────────────────────────────────────────────
+
+function ScoreRing({ score, size=120, strokeWidth=10 }) {
+  const r = (size - strokeWidth*2) / 2;
+  const circ = 2 * Math.PI * r;
+  const pct = score / 100;
+  const offset = circ - pct * circ;
+  const color = getScoreColor(score);
+  return (
+    <svg width={size} height={size} style={{display:'block'}}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,.15)" strokeWidth={strokeWidth}/>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={strokeWidth}
+        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+        className="progress-ring__circle" transform={`rotate(-90 ${size/2} ${size/2})`}/>
+      <text x="50%" y="50%" textAnchor="middle" dominantBaseline="central"
+        style={{fontSize:size*0.22,fontWeight:700,fontFamily:'JetBrains Mono',fill:'white'}}>
+        {score}%
+      </text>
+    </svg>
+  );
+}
+
+// ─── WATER TRACKER ────────────────────────────────────────────────────────────
+
+function WaterTracker({ water, setWater }) {
+  const goal = 3000;
+  const pct = Math.min(100, Math.round((water/goal)*100));
+  const add = (ml) => setWater(w => Math.min(goal+500, w+ml));
+  const bottles = Math.floor(water/250);
+  return (
+    <Card className="mb-3">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Icon name="drop" size={18} stroke="#4A7C6F"/>
+          <span className="font-semibold text-navy dark:text-cream text-sm">Agua</span>
+        </div>
+        <span className="font-mono text-sm font-bold text-sage">{(water/1000).toFixed(2)}L / 3L</span>
+      </div>
+      <ProgressBar value={water} max={goal} height={10} className="mb-3"/>
+      <div className="flex gap-2 mt-1 flex-wrap">
+        {[250,500].map(ml => (
+          <button key={ml} onClick={() => add(ml)}
+            className="flex-1 bg-l-sage dark:bg-navy text-sage-d dark:text-mint text-xs font-semibold py-2 rounded-xl active:scale-95 transition-transform">
+            +{ml}ml
+          </button>
+        ))}
+        {water > 0 && (
+          <button onClick={() => setWater(w => Math.max(0, w-250))}
+            className="bg-cream2 dark:bg-navy text-ash text-xs font-medium py-2 px-3 rounded-xl active:scale-95 transition-transform">
+            −
+          </button>
+        )}
+      </div>
+      {water >= 2500 && <p className="text-xs text-sage mt-2 font-medium">✓ Meta diaria alcanzada 💧</p>}
+    </Card>
+  );
+}
+
+// ─── TODAY SCREEN ─────────────────────────────────────────────────────────────
+
+function TodayScreen({ meals, setMeals, water, setWater, habits, setHabits, training, setTraining, setTab }) {
+  const act = getTodayActivity();
+  const now = new Date();
+  const hour = now.getHours();
+  const score = computeScore(meals, water, habits, training, act.isGym, act.gymDay);
+  const [showBreakdown, setShowBreakdown] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const prevScore = useRef(score);
+
+  useEffect(() => {
+    if (score === 100 && prevScore.current < 100) {
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 4500);
+    }
+    prevScore.current = score;
+  }, [score]);
+
+  const dayNum = daysSincePlan() + 1;
+  const weekNum = getWeekNumber();
+
+  const currentMeal = useMemo(() => {
+    if (hour < 9) return 'breakfast';
+    if (hour < 14) return 'lunch';
+    if (hour < 17) return 'snack';
+    return 'dinner';
+  }, [hour]);
+
+  const mealItems = [
+    { key:'breakfast', label:'Desayuno', time:'7:30-8:30am', kcal:400 },
+    { key:'lunch', label:'Almuerzo', time:'1-2pm', kcal:500 },
+    { key:'snack', label:'Snack', time:'4-5pm', kcal:225 },
+    { key:'dinner', label:'Cena', time:'6:30-7pm', kcal:400 },
+  ];
+  const trainingKcal = act.isGym ? 2300 : 2100;
+
+  const amHabits = MORNING_HABITS.filter(h => !h.gymOnly || act.gymDay);
+  const pmHabits = EVENING_HABITS;
+  const habitBlock = hour < 14 ? amHabits : pmHabits;
+  const habitLabel = hour < 14 ? 'Mañana' : 'Noche';
+
+  return (
+    <div className="fade-up pb-24 px-4 pt-4">
+      <Confetti active={showConfetti}/>
+      {/* Header */}
+      <div className="mb-4">
+        <p className="text-sm text-ash font-medium">{formatDate(now)}</p>
+        <h1 className="font-display text-2xl text-navy dark:text-cream font-bold leading-tight">
+          {getGreeting()},<br/>
+          <span className="text-sage">Joaquin</span>
+        </h1>
+        <p className="text-xs text-ash mt-1">Día {dayNum} del plan · Semana {weekNum}</p>
+      </div>
+
+      {/* Hero card */}
+      <div className="bg-navy rounded-3xl p-5 mb-4 relative overflow-hidden shadow-xl">
+        <div className="absolute top-0 right-0 w-40 h-40 rounded-full opacity-5" style={{background:'radial-gradient(circle,#4A7C6F,transparent)',transform:'translate(30%,-30%)'}}/>
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              {act.isGym ? <Icon name="dumbbell" size={18} stroke="#D4EDE8"/> : <Icon name="run" size={18} stroke="#D4EDE8"/>}
+              <span className="text-cream text-sm font-medium opacity-80">Hoy</span>
+            </div>
+            <p className="text-cream text-lg font-display font-semibold">
+              {act.isGym ? `Rutina ${act.rotation} — ${ROUTINES[act.rotation]?.name}` : act.extra || act.label}
+            </p>
+            {act.extra && act.isGym && <p className="text-mint text-xs mt-1 opacity-80">{act.extra}</p>}
+            <div className="mt-3">
+              <button
+                onClick={() => setTraining(t => ({ ...t, done: !t.done }))}
+                className={`text-xs font-semibold px-4 py-2 rounded-xl transition-all ${training.done ? 'bg-sage text-cream' : 'bg-white/10 text-cream border border-white/20'}`}>
+                {training.done ? '✓ Entrenamiento completo' : 'Marcar entrenamiento'}
+              </button>
+            </div>
+          </div>
+          <div className="cursor-pointer" onClick={() => setShowBreakdown(!showBreakdown)}>
+            <ScoreRing score={score} size={110}/>
+          </div>
+        </div>
+        {showBreakdown && (
+          <div className="mt-4 pt-4 border-t border-white/10 grid grid-cols-2 gap-2">
+            {[
+              {l:'Comidas', v:`${Object.values(meals).filter(Boolean).length}/4`},
+              {l:'Entrenamiento', v:training.done?'✓':'—'},
+              {l:'Hábitos AM', v:`${amHabits.filter(h=>habits[h.id]).length}/${amHabits.length}`},
+              {l:'Hábitos PM', v:`${pmHabits.filter(h=>habits[h.id]).length}/${pmHabits.length}`},
+              {l:'Agua', v:(water/1000).toFixed(1)+'L'},
+            ].map(({l,v}) => (
+              <div key={l} className="flex justify-between items-center">
+                <span className="text-xs text-cream/60">{l}</span>
+                <span className="text-xs text-mint font-mono font-bold">{v}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Banners */}
+      {act.gymDay && <BannerWarn icon="alarm" text="Gym en la mañana — despierta a las 6:30am" color="green" className="mb-2"/>}
+      {act.isClassNight && <BannerWarn icon="moon" text="Cena antes de las 7pm — clase a las 7:30pm" color="amber" className="mb-2"/>}
+
+      {/* Meals */}
+      <Card className="mb-3">
+        <p className="text-xs text-ash font-semibold uppercase tracking-wide mb-1">Comidas</p>
+        {mealItems.map(m => (
+          <CheckItem key={m.key} label={m.label} checked={!!meals[m.key]}
+            sub={`${m.time} · ~${m.kcal} kcal`}
+            onToggle={() => setMeals(prev => ({ ...prev, [m.key]: !prev[m.key] }))}/>
+        ))}
+        <p className="text-xs text-ash mt-2 pt-2 border-t border-gray-100 dark:border-navy">
+          Objetivo calórico: <span className="font-bold text-sage">{trainingKcal} kcal</span>
+          {act.isGym && ' (día de entrenamiento)'}
+        </p>
+      </Card>
+
+      {/* Water */}
+      <WaterTracker water={water} setWater={setWater}/>
+
+      {/* Habit strip */}
+      <div className="mb-3">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-ash font-semibold uppercase tracking-wide">Hábitos de {habitLabel}</p>
+          <button className="text-xs text-sage font-medium" onClick={() => setTab(3)}>Ver todos →</button>
+        </div>
+        <Card>
+          {habitBlock.slice(0,3).map(h => (
+            <CheckItem key={h.id} label={h.label} checked={!!habits[h.id]}
+              onToggle={() => setHabits(prev => ({ ...prev, [h.id]: !prev[h.id] }))}/>
+          ))}
+          {habitBlock.length > 3 && (
+            <button className="text-xs text-sage font-medium mt-2 pt-2 border-t border-gray-100 dark:border-navy w-full text-left" onClick={() => setTab(3)}>
+              +{habitBlock.length-3} más →
+            </button>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─── WORKOUT SCREEN ───────────────────────────────────────────────────────────
+
+function WorkoutScreen({ training, setTraining }) {
+  const [selDay, setSelDay] = useState(new Date().getDay());
+  const [selWeek, setSelWeek] = useState(() => {
+    try { return parseInt(localStorage.getItem('currentWeek')) || 1; } catch { return 1; }
+  });
+  const [expandBlock, setExpandBlock] = useState({});
+
+  useEffect(() => {
+    try { localStorage.setItem('currentWeek', String(selWeek)); } catch {}
+  }, [selWeek]);
+
+  const days = [1,2,3,4,5,6,0];
+  const today = new Date().getDay();
+
+  function getDayInfo(dow) {
+    const sched = SCHEDULE[dow];
+    if (!sched) return null;
+    const now = new Date();
+    const d = new Date(now);
+    const diff = dow - now.getDay();
+    d.setDate(d.getDate() + diff);
+    return { ...sched, rotation: sched.gymDay ? getGymRotation(d) : null, dow };
+  }
+
+  const selInfo = getDayInfo(selDay);
+  const routine = selInfo?.rotation ? ROUTINES[selInfo.rotation] : null;
+
+  function getWeightForSet(weights, weekIdx) {
+    if (!weights || !weights.length) return '—';
+    const idx = Math.min(weekIdx, weights.length-1);
+    return weights[idx] || weights[weights.length-1];
+  }
+
+  const wIdx = selWeek - 1;
+
+  function toggleSeries(exId, sIdx) {
+    setTraining(t => {
+      const series = t.series || {};
+      const exSeries = series[exId] || [];
+      const newSeries = [...exSeries];
+      newSeries[sIdx] = !newSeries[sIdx];
+      return { ...t, series: { ...series, [exId]: newSeries } };
+    });
+  }
+
+  function isSeriesDone(exId, sIdx) {
+    return !!(training.series?.[exId]?.[sIdx]);
+  }
+
+  const muscleColors = {
+    'Pecho':'bg-blue-50 text-blue-700','Hombros':'bg-purple-50 text-purple-700',
+    'Tríceps':'bg-orange-50 text-orange-700','Bíceps':'bg-pink-50 text-pink-700',
+    'Espalda':'bg-emerald-50 text-emerald-700','Piernas':'bg-yellow-50 text-yellow-700',
+    'Isquios':'bg-red-50 text-red-700','Isquios/Glúteos':'bg-red-50 text-red-700',
+    'Abdomen':'bg-l-sage text-sage-d','Core':'bg-teal-50 text-teal-700',
+    'Pantorrillas':'bg-gray-50 text-gray-700','Deltoides post.':'bg-indigo-50 text-indigo-700',
+    'Pecho alto':'bg-sky-50 text-sky-700',
+  };
+
+  return (
+    <div className="fade-up pb-28 px-4 pt-4">
+      <h2 className="font-display text-xl font-bold text-navy dark:text-cream mb-4">Entrenamiento</h2>
+
+      {/* Week selector */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xs text-ash font-semibold">Semana:</span>
+        <div className="flex gap-1 overflow-x-auto no-scrollbar">
+          {Array.from({length:8},(_,i)=>i+1).map(w => (
+            <button key={w} onClick={() => setSelWeek(w)}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex-shrink-0 ${selWeek===w ? 'bg-navy text-cream dark:bg-sage' : 'bg-cream2 dark:bg-navy2 text-ash'}`}>
+              S{w}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Day strip */}
+      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4 pb-1">
+        {days.map(dow => {
+          const info = getDayInfo(dow);
+          const label = SCHEDULE[dow]?.label;
+          const isToday = dow === today;
+          return (
+            <button key={dow} onClick={() => setSelDay(dow)}
+              className={`flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition-all ${selDay===dow ? 'bg-navy text-cream shadow-lg' : 'bg-cream2 dark:bg-navy2 text-ash'}`}>
+              <span className="text-xs font-semibold">{label}</span>
+              <div className="text-lg">
+                {info?.gymDay ? '💪' : info?.activity==='cardio' ? (dow===6?'🏐':'🏃') : '😴'}
+              </div>
+              {info?.rotation && <span className="text-xs font-bold text-sage">{info.rotation}</span>}
+              {isToday && <div className="w-1.5 h-1.5 rounded-full bg-sage"/>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Selected day detail */}
+      {selInfo && (
+        <>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-l-sage dark:bg-navy px-4 py-2 rounded-2xl">
+              <p className="font-display font-bold text-navy dark:text-cream">
+                {SCHEDULE[selDay]?.label}
+              </p>
+              {selInfo.rotation && (
+                <p className="text-sm text-sage font-semibold">Rutina {selInfo.rotation} · {routine?.name}</p>
+              )}
+              {!selInfo.gymDay && (
+                <p className="text-sm text-sage">{selInfo.extra || (selInfo.activity==='cardio' ? 'Cardio Z2 · 35-40min · FC 120-140' : 'Descanso')}</p>
+              )}
+            </div>
+          </div>
+
+          {selInfo.gymDay && routine ? (
+            <>
+              {routine.blocks.map((block, bIdx) => (
+                <div key={bIdx} className="mb-4">
+                  <div className="flex items-center gap-2 mb-2 cursor-pointer"
+                    onClick={() => setExpandBlock(e => ({...e,[bIdx]:e[bIdx]===false?true:false}))}>
+                    <div className="flex-1 flex items-center gap-2">
+                      <h3 className="font-semibold text-sm text-navy dark:text-cream">{block.name}</h3>
+                      <Pill label={`rest ${block.rest}`} color="gray" size="sm"/>
+                      {block.superset && <Pill label="superset" color="mint" size="sm"/>}
+                    </div>
+                    <Icon name={expandBlock[bIdx]===false?'chev_right':'chev_down'} size={16} stroke="#6B7280"/>
+                  </div>
+                  {expandBlock[bIdx]!==false && (
+                    <div className="space-y-3">
+                      {block.exercises.map(ex => {
+                        const numSets = ex.sets || 3;
+                        return (
+                          <div key={ex.id} className="bg-cream2 dark:bg-navy2 rounded-2xl p-4">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 flex-wrap mb-1">
+                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${muscleColors[ex.muscle] || 'bg-gray-100 text-gray-700'}`}>{ex.muscle}</span>
+                                  {ex.target && <span className="text-xs text-ash">→ {ex.target}</span>}
+                                </div>
+                                <p className="font-semibold text-navy dark:text-cream text-sm">{ex.name}</p>
+                                <p className="text-xs text-ash mt-0.5">{ex.cue}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <div>
+                                <span className="font-mono text-xs font-bold text-sage">{getWeightForSet(ex.weights, wIdx)}</span>
+                                <span className="text-xs text-ash ml-2">{ex.reps}</span>
+                              </div>
+                              <div className="flex gap-1">
+                                {Array.from({length:numSets},(_,i)=>i).map(i => (
+                                  <button key={i} onClick={() => toggleSeries(ex.id, i)}
+                                    className={`w-7 h-7 rounded-full text-xs font-bold transition-all ${isSeriesDone(ex.id,i) ? 'bg-sage text-cream' : 'bg-gray-100 dark:bg-navy text-ash border border-gray-200 dark:border-gray-700'}`}>
+                                    {i+1}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Mark done button */}
+              <button onClick={() => setTraining(t => ({...t, done:!t.done}))}
+                className={`w-full py-4 rounded-2xl font-bold text-sm transition-all active:scale-95 ${training.done ? 'bg-sage text-cream' : 'bg-navy text-cream'}`}>
+                {training.done ? '✓ Sesión completada' : 'Marcar sesión completa'}
+              </button>
+
+              {/* Scoliosis card */}
+              <div className="mt-4 bg-amber border border-amber-b rounded-2xl p-4">
+                <p className="font-semibold text-yellow-800 text-sm mb-2">⚠️ Protocolo escoliosis</p>
+                <ul className="text-xs text-yellow-700 space-y-1 list-disc pl-4">
+                  <li>Calentar columna 5min antes: gatos-vacas, rotaciones</li>
+                  <li>Evitar cargas asimétricas pesadas sin supervisión</li>
+                  <li>Fortalecer core en TODOS los bloques 4</li>
+                  <li>Terminar con 5min de stretching posterior</li>
+                </ul>
+              </div>
+            </>
+          ) : (
+            <Card>
+              <div className="flex items-center gap-3">
+                {selInfo.activity === 'cardio' ? <Icon name="run" size={24} stroke="#4A7C6F"/> : <Icon name="volleyball" size={24} stroke="#4A7C6F"/>}
+                <div>
+                  <p className="font-semibold text-navy dark:text-cream">{selInfo.activity === 'cardio' ? 'Cardio Zona 2' : 'Descanso activo'}</p>
+                  <p className="text-xs text-ash">{selInfo.extra || 'Recuperación'}</p>
+                </div>
+              </div>
+              {selInfo.activity === 'cardio' && (
+                <div className="mt-3 space-y-1 text-xs text-ash">
+                  <p>• Duración: 35-40 minutos</p>
+                  <p>• Frecuencia cardíaca: 120-140 bpm</p>
+                  <p>• Modalidad: carrera / bici / caminata</p>
+                </div>
+              )}
+            </Card>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── DIET SCREEN ──────────────────────────────────────────────────────────────
+
+function DietScreen({ meals, setMeals }) {
+  const [subTab, setSubTab] = useState('hoy');
+  const [expanded, setExpanded] = useState({});
+  const act = getTodayActivity();
+  const now = new Date();
+  const hour = now.getHours();
+
+  const currentMealKey = useMemo(() => {
+    if (hour < 9) return 'breakfast';
+    if (hour < 14) return 'lunch';
+    if (hour < 17) return 'snack';
+    return 'dinner';
+  }, [hour]);
+
+  const daysToMilestone = Math.ceil((CANCUN_DATE - now) / 86400000);
+  const daysToMid = Math.ceil((MIDGOAL_DATE - now) / 86400000);
+
+  return (
+    <div className="fade-up pb-28 px-4 pt-4">
+      {/* Phase card */}
+      <div className="bg-navy rounded-3xl p-5 mb-4 shadow-xl">
+        <div className="flex items-center gap-2 mb-3">
+          <Icon name="flame" size={18} stroke="#F2D98A"/>
+          <span className="text-amber-b font-semibold text-sm">Fase Pérdida Grasa</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-cream/60 text-xs">Objetivo Cancún</p>
+            <p className="text-cream font-mono font-bold">84-87kg · 17-19%</p>
+            <p className="text-mint text-xs">en {daysToMilestone} días</p>
+          </div>
+          <div>
+            <p className="text-cream/60 text-xs">Meta intermedia</p>
+            <p className="text-cream font-mono font-bold">88-90kg · 20-22%</p>
+            <p className="text-mint text-xs">en {daysToMid} días</p>
+          </div>
+        </div>
+        <div className="mt-3 pt-3 border-t border-white/10 grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-cream/60 text-xs">Día descanso</p>
+            <p className="text-cream font-mono font-bold">~2,100 kcal</p>
+          </div>
+          <div>
+            <p className="text-cream/60 text-xs">Día entreno</p>
+            <p className="text-cream font-mono font-bold">~2,300 kcal</p>
+          </div>
+          <div>
+            <p className="text-cream/60 text-xs">Proteína</p>
+            <p className="text-cream font-mono font-bold">180-190g/día</p>
+          </div>
+          <div>
+            <p className="text-cream/60 text-xs">TMB</p>
+            <p className="text-cream font-mono font-bold">2,027 kcal</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Sub tabs */}
+      <div className="flex gap-2 mb-4">
+        {['hoy','porciones'].map(t => (
+          <button key={t} onClick={() => setSubTab(t)}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all capitalize ${subTab===t ? 'bg-navy text-cream' : 'bg-cream2 dark:bg-navy2 text-ash'}`}>
+            {t.charAt(0).toUpperCase()+t.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'hoy' && (
+        <>
+          {Object.values(MEALS).map(meal => {
+            const isNow = meal.id === currentMealKey;
+            const done = !!meals[meal.id];
+            const open = !!expanded[meal.id];
+            return (
+              <div key={meal.id} className={`mb-3 rounded-2xl overflow-hidden border transition-all ${isNow ? 'border-sage' : 'border-transparent'}`}>
+                <div className={`flex items-center justify-between p-4 cursor-pointer ${done ? 'bg-l-sage dark:bg-navy' : 'bg-cream2 dark:bg-navy2'}`}
+                  onClick={() => setExpanded(e => ({...e,[meal.id]:!e[meal.id]}))}>
+                  <div className="flex items-center gap-3">
+                    <button onClick={(e) => { e.stopPropagation(); setMeals(m => ({...m,[meal.id]:!m[meal.id]})); }}
+                      className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${done ? 'bg-sage border-sage' : 'border-gray-300 dark:border-gray-600'}`}>
+                      {done && <Icon name="check" size={12} stroke="white"/>}
+                    </button>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-navy dark:text-cream text-sm">{meal.label}</p>
+                        {isNow && <span className="text-xs bg-sage text-cream px-2 py-0.5 rounded-full">Ahora</span>}
+                      </div>
+                      <p className="text-xs text-ash">{meal.time} · ~{meal.kcal} kcal · {meal.protein} prot.</p>
+                    </div>
+                  </div>
+                  <Icon name={open?'chev_up':'chev_down'} size={16} stroke="#6B7280"/>
+                </div>
+                {open && (
+                  <div className="bg-cream2/50 dark:bg-navy2/80 p-4 space-y-3">
+                    {meal.options.map((opt,i) => (
+                      <div key={i}>
+                        <p className="text-xs font-bold text-ash uppercase tracking-wide mb-1">{opt.cat}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {opt.items.map((item,j) => (
+                            <span key={j} className="text-xs bg-white dark:bg-navy px-2 py-1 rounded-lg text-navy dark:text-cream">{item}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {act.isGym && (
+            <Card className="border border-sage/30 bg-l-sage dark:bg-navy">
+              <p className="font-semibold text-sage-d dark:text-mint text-sm mb-2">💪 Extras día de entrenamiento</p>
+              <div className="space-y-2 text-xs text-ash">
+                <div><span className="font-bold text-navy dark:text-cream">Pre-entreno: </span>½ banana ó 30g granola</div>
+                <div><span className="font-bold text-navy dark:text-cream">Post-entreno A: </span>½ camote + 150g pollo</div>
+                <div><span className="font-bold text-navy dark:text-cream">Post-entreno B: </span>3 huevos + 40g arroz</div>
+              </div>
+            </Card>
+          )}
+
+          <div className="mt-4 bg-amber rounded-2xl p-4">
+            <p className="font-semibold text-yellow-800 text-sm mb-2">🍲 Guía de guisos</p>
+            <div className="space-y-1 text-xs text-yellow-700">
+              <p><strong>Seco/Estofado:</strong> pedir más carne, menos arroz ✓</p>
+              <p><strong>Pollo c/maní:</strong> prot+grasa OK → añadir 40g arroz aparte</p>
+              <p><strong>Tallarines:</strong> baja prot → agregar 150g pollo encima</p>
+              <p><strong>Lentejas/frejoles:</strong> prot vegetal → agregar 2 huevos</p>
+              <p><strong>Caigua rellena:</strong> 2 caiguas + 40g arroz aparte</p>
+            </div>
+          </div>
+        </>
+      )}
+
+      {subTab === 'porciones' && (
+        <div className="space-y-4">
+          <Card>
+            <p className="font-bold text-navy dark:text-cream text-sm mb-3">Tabla de Proteínas</p>
+            <div className="space-y-2">
+              {[
+                ['Pollo cocido','150g','~33g'],['Pescado cocido','160g','~34g'],['Carne cocida','130g','~33g'],
+                ['Huevo entero','1 u (~55g)','~7g'],['Clara','1 u (~33g)','~4g'],['Queso fresco','30g','~6g'],
+                ['Pollo deshilachado','120g','~27g'],
+              ].map(([f,w,p]) => (
+                <div key={f} className="flex items-center justify-between text-xs py-1.5 border-b border-gray-100 dark:border-navy last:border-0">
+                  <span className="text-navy dark:text-cream">{f}</span>
+                  <div className="flex gap-3">
+                    <span className="text-ash">{w}</span>
+                    <span className="font-mono font-bold text-sage">{p}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+          <Card>
+            <p className="font-bold text-navy dark:text-cream text-sm mb-3">Carbohidratos</p>
+            <div className="space-y-2">
+              {[
+                ['Arroz crudo','55g','~155g coc.','~40g CH'],
+                ['Arroz crudo','40g','~115g coc.','~29g CH'],
+                ['Pasta cruda','55g','~140g coc.','~38g CH'],
+                ['Papa cocida','150g','—','~26g CH'],
+                ['Camote cocido','130g','—','~30g CH'],
+                ['Legumbres','½ taza','—','~20g CH'],
+              ].map(([f,r,c,ch]) => (
+                <div key={f+r} className="flex items-center justify-between text-xs py-1.5 border-b border-gray-100 dark:border-navy last:border-0">
+                  <span className="text-navy dark:text-cream">{f} <span className="text-ash">({r})</span></span>
+                  <div className="flex gap-2">
+                    {c !== '—' && <span className="text-ash">{c}</span>}
+                    <span className="font-mono font-bold text-sage">{ch}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── HABITS SCREEN ────────────────────────────────────────────────────────────
+
+function HabitsScreen({ habits, setHabits, trackers, setTrackers, history, training, meals, water }) {
+  const act = getTodayActivity();
+  const streaks = useHabitStreaks(history);
+  const allHabits = [...MORNING_HABITS, ...EVENING_HABITS];
+  const amDone = MORNING_HABITS.filter(h => (!h.gymOnly || act.gymDay) && habits[h.id]).length;
+  const amTotal = MORNING_HABITS.filter(h => !h.gymOnly || act.gymDay).length;
+  const pmDone = EVENING_HABITS.filter(h => habits[h.id]).length;
+
+  function toggleH(id) { setHabits(h => ({...h,[id]:!h[id]})); }
+  function adjustTracker(id, delta) {
+    setTrackers(t => {
+      const trk = TRACKERS.find(x => x.id === id);
+      const val = Math.max(0, Math.min(trk.goal*3, (t[id]||0) + delta));
+      return {...t, [id]:val};
+    });
+  }
+
+  return (
+    <div className="fade-up pb-28 px-4 pt-4">
+      <h2 className="font-display text-xl font-bold text-navy dark:text-cream mb-4">Hábitos</h2>
+
+      {/* Progress bars */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        {[
+          {l:'Mañana',v:amDone,m:amTotal,c:'#4A7C6F'},
+          {l:'Noche',v:pmDone,m:EVENING_HABITS.length,c:'#243044'},
+          {l:'Comidas',v:Object.values(meals).filter(Boolean).length,m:4,c:'#E0B040'},
+          {l:'Agua',v:Math.min(3000,water||0),m:3000,c:'#4A7C6F'},
+        ].map(({l,v,m,c}) => (
+          <div key={l} className="bg-cream2 dark:bg-navy2 rounded-2xl p-3">
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-ash font-medium">{l}</span>
+              <span className="font-mono font-bold text-navy dark:text-cream">{l==='Agua'?`${(v/1000).toFixed(1)}L`:`${v}/${m}`}</span>
+            </div>
+            <ProgressBar value={v} max={m} color={c} height={6}/>
+          </div>
+        ))}
+      </div>
+
+      {/* Morning habits */}
+      <div className="mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Icon name="sun" size={16} stroke="#4A7C6F"/>
+          <h3 className="font-semibold text-navy dark:text-cream text-sm">Rutina de mañana</h3>
+          <span className="text-xs text-ash ml-auto">{amDone}/{amTotal}</span>
+        </div>
+        <Card>
+          {MORNING_HABITS.filter(h => !h.gymOnly || act.gymDay).map(h => (
+            <div key={h.id} className="flex items-center gap-3 py-3 border-b border-gray-100 dark:border-navy last:border-0 cursor-pointer" onClick={() => toggleH(h.id)}>
+              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 ${habits[h.id] ? 'bg-sage border-sage' : 'border-gray-300 dark:border-gray-600'}`}>
+                {habits[h.id] && <Icon name="check" size={12} stroke="white"/>}
+              </div>
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Icon name={h.icon} size={14} stroke={habits[h.id]?'#4A7C6F':'#6B7280'}/>
+                <span className={`text-xs flex-1 ${habits[h.id] ? 'line-through text-ash' : 'text-navy dark:text-cream'}`}>{h.label}</span>
+              </div>
+              {streaks[h.id] >= 2 && (
+                <span className="text-xs bg-amber-b text-yellow-800 px-2 py-0.5 rounded-full font-bold flex-shrink-0">🔥 {streaks[h.id]}d</span>
+              )}
+            </div>
+          ))}
+        </Card>
+      </div>
+
+      {/* Evening habits */}
+      <div className="mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Icon name="moon" size={16} stroke="#3A6358"/>
+          <h3 className="font-semibold text-navy dark:text-cream text-sm">Rutina de noche</h3>
+          <span className="text-xs text-ash ml-auto">{pmDone}/{EVENING_HABITS.length}</span>
+        </div>
+        <Card>
+          {EVENING_HABITS.map(h => (
+            <div key={h.id} className="flex items-center gap-3 py-3 border-b border-gray-100 dark:border-navy last:border-0 cursor-pointer" onClick={() => toggleH(h.id)}>
+              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 ${habits[h.id] ? 'bg-navy border-navy' : 'border-gray-300 dark:border-gray-600'}`}>
+                {habits[h.id] && <Icon name="check" size={12} stroke="white"/>}
+              </div>
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Icon name={h.icon} size={14} stroke={habits[h.id]?'#3A6358':'#6B7280'}/>
+                <span className={`text-xs flex-1 ${habits[h.id] ? 'line-through text-ash' : 'text-navy dark:text-cream'}`}>{h.label}</span>
+              </div>
+              {streaks[h.id] >= 2 && (
+                <span className="text-xs bg-amber-b text-yellow-800 px-2 py-0.5 rounded-full font-bold flex-shrink-0">🔥 {streaks[h.id]}d</span>
+              )}
+            </div>
+          ))}
+        </Card>
+      </div>
+
+      {/* Trackers */}
+      <div>
+        <h3 className="font-semibold text-navy dark:text-cream text-sm mb-3">Metas del día</h3>
+        <div className="space-y-3">
+          {TRACKERS.map(trk => {
+            const val = trackers[trk.id] || 0;
+            const pct = Math.min(100, Math.round((val/trk.goal)*100));
+            return (
+              <Card key={trk.id}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Icon name={trk.icon} size={16} stroke="#4A7C6F"/>
+                    <span className="font-medium text-sm text-navy dark:text-cream">{trk.label}</span>
+                  </div>
+                  <span className="font-mono text-sm font-bold text-sage">{val}<span className="text-ash text-xs">/{trk.goal} {trk.unit}</span></span>
+                </div>
+                <ProgressBar value={val} max={trk.goal} height={8} className="mb-3"/>
+                <div className="flex gap-2">
+                  <button onClick={() => adjustTracker(trk.id, -trk.step)}
+                    className="w-9 h-9 rounded-xl bg-cream dark:bg-navy flex items-center justify-center active:scale-95 transition-transform">
+                    <Icon name="minus" size={16} stroke="#6B7280"/>
+                  </button>
+                  <div className="flex-1 flex items-center justify-center text-xs text-ash">+{trk.step} {trk.unit}</div>
+                  <button onClick={() => adjustTracker(trk.id, trk.step)}
+                    className="w-9 h-9 rounded-xl bg-l-sage dark:bg-navy2 flex items-center justify-center active:scale-95 transition-transform">
+                    <Icon name="plus" size={16} stroke="#4A7C6F"/>
+                  </button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── TODO SCREEN ──────────────────────────────────────────────────────────────
+
+function TodoScreen({ todos, setTodos }) {
+  const [filter, setFilter] = useState('Todas');
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ title:'', note:'', priority:'Media', dueDate:'', pinned:false });
+  const [deleteId, setDeleteId] = useState(null);
+  const inputRef = useRef(null);
+
+  const todayStr = today();
+  const priorityColors = { Alta:'red', Media:'amber', Baja:'sage' };
+  const priorityBg = { Alta:'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400', Media:'bg-amber text-yellow-700', Baja:'bg-l-sage text-sage-d' };
+
+  const filtered = useMemo(() => {
+    let list = [...todos];
+    if (filter !== 'Todas') list = list.filter(t => t.priority === filter);
+    return list;
+  }, [todos, filter]);
+
+  const hoy = filtered.filter(t => !t.done && (t.pinned || t.dueDate === todayStr));
+  const pendientes = filtered.filter(t => !t.done && !t.pinned && t.dueDate !== todayStr);
+  const completadas = filtered.filter(t => t.done);
+
+  function addTodo() {
+    if (!form.title.trim()) return;
+    const newTodo = { id:Date.now().toString(), ...form, done:false, createdAt:todayStr };
+    setTodos(t => [newTodo, ...t]);
+    setForm({ title:'', note:'', priority:'Media', dueDate:'', pinned:false });
+    setShowAdd(false);
+  }
+
+  function toggleDone(id) {
+    setTodos(t => t.map(x => x.id===id ? {...x,done:!x.done} : x));
+  }
+
+  function deleteTodo(id) {
+    setTodos(t => t.filter(x => x.id!==id));
+    setDeleteId(null);
+  }
+
+  function togglePin(id) {
+    setTodos(t => t.map(x => x.id===id ? {...x,pinned:!x.pinned} : x));
+  }
+
+  const pendingCount = todos.filter(t => !t.done).length;
+
+  function TodoItem2({ todo }) {
+    return (
+      <div className={`flex items-start gap-3 py-3 border-b border-gray-100 dark:border-navy last:border-0 transition-all ${deleteId===todo.id ? 'bg-red-50 dark:bg-red-900/20' : ''}`}>
+        <button onClick={() => toggleDone(todo.id)}
+          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${todo.done ? 'bg-sage border-sage' : 'border-gray-300 dark:border-gray-600'}`}>
+          {todo.done && <Icon name="check" size={12} stroke="white"/>}
+        </button>
+        <div className="flex-1 min-w-0" onClick={() => toggleDone(todo.id)}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-sm font-medium ${todo.done ? 'line-through text-ash' : 'text-navy dark:text-cream'}`}>{todo.title}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${priorityBg[todo.priority]}`}>{todo.priority}</span>
+            {todo.pinned && <Icon name="pin" size={12} stroke="#4A7C6F"/>}
+          </div>
+          {todo.note && <p className="text-xs text-ash mt-0.5 truncate">{todo.note}</p>}
+          {todo.dueDate && <p className="text-xs text-ash">{todo.dueDate}</p>}
+        </div>
+        <div className="flex gap-1 flex-shrink-0">
+          {!todo.done && (
+            <button onClick={() => togglePin(todo.id)} className="w-7 h-7 rounded-lg flex items-center justify-center active:scale-95">
+              <Icon name="pin" size={14} stroke={todo.pinned?'#4A7C6F':'#6B7280'}/>
+            </button>
+          )}
+          <button onClick={() => setDeleteId(deleteId===todo.id?null:todo.id)} className="w-7 h-7 rounded-lg flex items-center justify-center active:scale-95">
+            <Icon name="trash" size={14} stroke={deleteId===todo.id?'#C66054':'#6B7280'}/>
+          </button>
+          {deleteId===todo.id && (
+            <button onClick={() => deleteTodo(todo.id)} className="bg-red-500 text-white text-xs px-2 rounded-lg font-bold active:scale-95">✓</button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-up pb-36 px-4 pt-4">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-display text-xl font-bold text-navy dark:text-cream">Tareas</h2>
+        {pendingCount > 0 && <span className="bg-sage text-cream text-xs font-bold px-2 py-1 rounded-full">{pendingCount}</span>}
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">
+        {['Todas','Alta','Media','Baja'].map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex-shrink-0 transition-all ${filter===f ? 'bg-navy text-cream' : 'bg-cream2 dark:bg-navy2 text-ash'}`}>
+            {f}
+          </button>
+        ))}
+        {completadas.length > 0 && (
+          <button onClick={() => setTodos(t => t.filter(x => !x.done))}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold flex-shrink-0 text-red-500 bg-red-50 dark:bg-red-900/20 ml-auto">
+            Limpiar ({completadas.length})
+          </button>
+        )}
+      </div>
+
+      {/* Hoy */}
+      {hoy.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-bold text-ash uppercase tracking-wide mb-2">Hoy</p>
+          <Card>{hoy.map(t => <TodoItem2 key={t.id} todo={t}/>)}</Card>
+        </div>
+      )}
+
+      {/* Pendientes */}
+      {pendientes.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-bold text-ash uppercase tracking-wide mb-2">Pendientes</p>
+          <Card>{pendientes.map(t => <TodoItem2 key={t.id} todo={t}/>)}</Card>
+        </div>
+      )}
+
+      {/* Completadas */}
+      {completadas.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-bold text-ash uppercase tracking-wide mb-2">Completadas</p>
+          <Card className="opacity-70">{completadas.map(t => <TodoItem2 key={t.id} todo={t}/>)}</Card>
+        </div>
+      )}
+
+      {todos.filter(t=>!t.done).length === 0 && todos.length === 0 && (
+        <div className="text-center py-16">
+          <p className="text-2xl mb-2">✨</p>
+          <p className="text-ash font-medium">Todo limpio · ¿qué sigue?</p>
+        </div>
+      )}
+
+      {/* Quick add */}
+      <div className="fixed bottom-20 left-0 right-0 px-4 max-w-md mx-auto z-30">
+        {showAdd ? (
+          <div className="bg-white dark:bg-navy2 rounded-2xl shadow-2xl p-4 border border-gray-100 dark:border-gray-700">
+            <input ref={inputRef} value={form.title} onChange={e => setForm(f=>({...f,title:e.target.value}))}
+              placeholder="Nueva tarea..." autoFocus
+              className="w-full text-sm bg-transparent text-navy dark:text-cream outline-none mb-3 font-medium placeholder-ash"
+              onKeyDown={e => e.key==='Enter' && addTodo()}/>
+            <input value={form.note} onChange={e => setForm(f=>({...f,note:e.target.value}))}
+              placeholder="Nota opcional..."
+              className="w-full text-xs bg-transparent text-ash outline-none mb-3 placeholder-gray-300"/>
+            <div className="flex gap-2 items-center flex-wrap">
+              {['Alta','Media','Baja'].map(p => (
+                <button key={p} onClick={() => setForm(f=>({...f,priority:p}))}
+                  className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${form.priority===p ? (p==='Alta'?'bg-red-500 text-white':p==='Media'?'bg-amber-b text-yellow-800':'bg-sage text-cream') : 'bg-gray-100 dark:bg-navy text-ash'}`}>
+                  {p}
+                </button>
+              ))}
+              <input type="date" value={form.dueDate} onChange={e => setForm(f=>({...f,dueDate:e.target.value}))}
+                className="text-xs bg-gray-100 dark:bg-navy text-ash rounded-xl px-2 py-1.5 outline-none ml-auto"/>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => setShowAdd(false)} className="flex-1 py-2 rounded-xl text-sm text-ash bg-gray-100 dark:bg-navy font-medium">Cancelar</button>
+              <button onClick={addTodo} className="flex-1 py-2 rounded-xl text-sm text-cream bg-navy dark:bg-sage font-bold">Agregar</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setShowAdd(true)}
+            className="w-full bg-navy dark:bg-sage text-cream py-4 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-transform">
+            <Icon name="plus" size={18} stroke="white"/>
+            Agregar tarea
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── WEEK SCREEN ──────────────────────────────────────────────────────────────
+
+function WeekScreen({ history, meals, water, habits, training, trackers }) {
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+
+  const days = Array.from({length:7},(_,i) => {
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    return d;
+  });
+
+  function getDayScore(dateObj) {
+    const key = fmt(dateObj);
+    const todayKey = today();
+    if (key === todayKey) {
+      const act = getTodayActivity(dateObj);
+      return computeScore(meals, water, habits, training, act.isGym, act.gymDay);
+    }
+    const h = history[key];
+    if (!h) return null;
+    const act = getTodayActivity(dateObj);
+    return computeScore(h.meals||{}, h.water||0, h.habits||{}, h.training||{}, act.isGym, act.gymDay);
+  }
+
+  const dayLabels = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const todayKey = today();
+  const greenDays = days.filter(d => { const s = getDayScore(d); return s !== null && s >= 80; }).length;
+  const totalDays = days.filter(d => fmt(d) <= todayKey).length;
+
+  let streak = 0;
+  for (let i = days.length-1; i >= 0; i--) {
+    const s = getDayScore(days[i]);
+    if (s !== null && s >= 80) streak++;
+    else break;
+  }
+
+  // Stats
+  const trainedDays = days.filter(d => {
+    const key = fmt(d);
+    if (key === todayKey) return training.done;
+    return history[key]?.training?.done;
+  }).length;
+
+  const avgScore = useMemo(() => {
+    const scores = days.map(getDayScore).filter(s => s !== null);
+    return scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
+  }, [days, history]);
+
+  return (
+    <div className="fade-up pb-28 px-4 pt-4">
+      <h2 className="font-display text-xl font-bold text-navy dark:text-cream mb-4">Esta semana</h2>
+
+      {/* Day strip */}
+      <div className="flex gap-1.5 mb-4">
+        {days.map((d,i) => {
+          const score = getDayScore(d);
+          const isToday = fmt(d) === todayKey;
+          const isFuture = fmt(d) > todayKey;
+          const bg = isToday ? '#1A2332' : isFuture ? '#F2EFEA' : score === null ? '#F2EFEA' : score >= 80 ? '#EAF2EF' : score >= 50 ? '#FEF9EC' : '#FEE2E2';
+          const textColor = isToday ? 'text-cream' : 'text-navy dark:text-cream';
+          const scoreColor = !isFuture && score !== null ? getScoreColor(score) : '#6B7280';
+          const act = getTodayActivity(d);
+          return (
+            <div key={i} className="flex-1 rounded-2xl p-2 flex flex-col items-center gap-1" style={{background:bg}}>
+              <span className={`text-xs font-semibold ${textColor} dark:text-cream`}>{dayLabels[i]}</span>
+              <div className="text-base">
+                {act.gymDay ? '💪' : act.activity==='cardio' ? (d.getDay()===6?'🏐':'🏃') : '😴'}
+              </div>
+              {score !== null && !isFuture ? (
+                <span className="font-mono text-xs font-bold" style={{color:scoreColor}}>{score}%</span>
+              ) : (
+                <span className="text-xs text-ash">—</span>
+              )}
+              {isToday && <div className="w-1.5 h-1.5 rounded-full bg-sage"/>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {[
+          {l:'Score promedio', v:`${avgScore}%`, c:'#4A7C6F'},
+          {l:'Días ≥80%', v:`${greenDays}/${totalDays}`, c:'#4A7C6F'},
+          {l:'Racha actual', v:`${streak}d 🔥`, c:'#E0B040'},
+        ].map(({l,v,c}) => (
+          <div key={l} className="bg-cream2 dark:bg-navy2 rounded-2xl p-3 text-center">
+            <p className="font-mono text-lg font-bold" style={{color:c}}>{v}</p>
+            <p className="text-xs text-ash">{l}</p>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          {l:'Entrenos completados', v:`${trainedDays} sesiones`},
+          {l:'Semana del plan', v:`S${getWeekNumber()}`},
+        ].map(({l,v}) => (
+          <div key={l} className="bg-cream2 dark:bg-navy2 rounded-2xl p-3">
+            <p className="font-mono font-bold text-navy dark:text-cream">{v}</p>
+            <p className="text-xs text-ash">{l}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── PROGRESS SCREEN ──────────────────────────────────────────────────────────
+
+function ProgressScreen({ weightLog, setWeightLog }) {
+  const [newWeight, setNewWeight] = useState('');
+  const now = new Date();
+  const isSunday = now.getDay() === 0;
+  const daysToNextInBody = useMemo(() => {
+    const start = new Date(PLAN_START);
+    const d = new Date(now); d.setHours(0,0,0,0);
+    const diff = Math.floor((d - start) / 86400000);
+    const nextCheck = Math.ceil(diff / 28) * 28;
+    return nextCheck - diff;
+  }, []);
+
+  const sorted = [...weightLog].sort((a,b) => a.date.localeCompare(b.date));
+  const latest = sorted[sorted.length-1];
+  const startWeight = 93.6;
+  const cancunLow = 84, cancunHigh = 87;
+  const midLow = 88, midHigh = 90;
+  const todayKey = today();
+  const alreadyLoggedToday = sorted.some(e => e.date === todayKey);
+
+  function addWeight() {
+    const w = parseFloat(newWeight);
+    if (isNaN(w) || w < 40 || w > 200) return;
+    const entry = { date: todayKey, weight: w };
+    setWeightLog(prev => {
+      const filtered = prev.filter(e => e.date !== todayKey);
+      return [...filtered, entry].sort((a,b) => a.date.localeCompare(b.date));
+    });
+    setNewWeight('');
+  }
+
+  // SVG chart
+  const chartW = 340, chartH = 160;
+  const pad = { top:16, right:16, bottom:28, left:36 };
+  const innerW = chartW - pad.left - pad.right;
+  const innerH = chartH - pad.top - pad.bottom;
+
+  const chartData = useMemo(() => {
+    if (!sorted.length) return { points:'', cancunBand:'', midBand:'', xLabels:[], minY:80, maxY:95 };
+    const weights = sorted.map(e => e.weight);
+    const minY = Math.min(...weights, cancunLow) - 2;
+    const maxY = Math.max(...weights, startWeight) + 1;
+    const n = sorted.length;
+    function toX(i) { return pad.left + (n===1 ? innerW/2 : (i/(n-1))*innerW); }
+    function toY(w) { return pad.top + innerH - ((w - minY)/(maxY - minY))*innerH; }
+    const points = sorted.map((e,i) => `${toX(i)},${toY(e.weight)}`).join(' ');
+    const cancunY1 = toY(cancunHigh), cancunY2 = toY(cancunLow);
+    const midY1 = toY(midHigh), midY2 = toY(midLow);
+    const xLabels = sorted.filter((_,i) => i === 0 || i === sorted.length-1 || i % Math.max(1,Math.floor(n/4)) === 0)
+      .map((e,_,arr) => {
+        const i = sorted.indexOf(e);
+        return { x:toX(i), label:e.date.slice(5) };
+      });
+    return { points, minY, maxY, toX, toY, cancunY1, cancunY2, midY1, midY2, xLabels };
+  }, [sorted]);
+
+  const changeFromStart = latest ? (latest.weight - startWeight).toFixed(1) : '—';
+
+  return (
+    <div className="fade-up pb-28 px-4 pt-4">
+      <h2 className="font-display text-xl font-bold text-navy dark:text-cream mb-4">Progreso</h2>
+
+      {isSunday && (
+        <BannerWarn icon="camera" text="Domingo — toma foto de progreso 📸" color="amber" className="mb-4"/>
+      )}
+
+      {/* Big weight card */}
+      <div className="bg-navy rounded-3xl p-5 mb-4 shadow-xl">
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-cream/60 text-xs mb-1">Peso actual</p>
+            <div className="flex items-end gap-2">
+              <span className="font-mono text-4xl font-bold text-cream">{latest?.weight || startWeight}</span>
+              <span className="text-cream/60 text-sm mb-1">kg</span>
+            </div>
+            <p className={`text-xs mt-1 font-medium ${parseFloat(changeFromStart) < 0 ? 'text-mint' : 'text-amber-b'}`}>
+              {changeFromStart !== '—' && parseFloat(changeFromStart) < 0 ? '↓' : '↑'} {Math.abs(parseFloat(changeFromStart)) || 0}kg desde inicio
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-cream/60 text-xs mb-1">Grasa corporal</p>
+            <span className="font-mono text-2xl font-bold text-cream">25.5</span>
+            <span className="text-cream/60 text-sm">%</span>
+            <p className="text-mint text-xs mt-1">Meta: 17-19%</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Add weight */}
+      <Card className="mb-4">
+        <p className="text-xs font-semibold text-ash mb-2">Registrar peso de hoy</p>
+        <div className="flex gap-2">
+          <input type="number" value={newWeight} onChange={e => setNewWeight(e.target.value)}
+            placeholder={latest?.weight || '93.6'} step="0.1"
+            className="flex-1 bg-cream dark:bg-navy text-navy dark:text-cream text-sm font-mono px-3 py-2 rounded-xl outline-none border border-gray-200 dark:border-gray-700"
+            onKeyDown={e => e.key==='Enter' && addWeight()}/>
+          <button onClick={addWeight} className="bg-navy dark:bg-sage text-cream px-4 py-2 rounded-xl font-bold text-sm active:scale-95 transition-transform">
+            {alreadyLoggedToday ? 'Update' : 'Agregar'}
+          </button>
+        </div>
+      </Card>
+
+      {/* Chart */}
+      {sorted.length > 0 && (
+        <Card className="mb-4 overflow-hidden p-3">
+          <p className="text-xs font-semibold text-ash mb-2">Historial de peso</p>
+          <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="xMidYMid meet">
+            {/* Bands */}
+            {chartData.midY1 !== undefined && (
+              <rect x={pad.left} y={chartData.midY1} width={innerW} height={chartData.midY2-chartData.midY1}
+                fill="#D4EDE8" opacity=".5"/>
+            )}
+            {chartData.cancunY1 !== undefined && (
+              <rect x={pad.left} y={chartData.cancunY1} width={innerW} height={chartData.cancunY2-chartData.cancunY1}
+                fill="#EAF2EF" opacity=".6"/>
+            )}
+            {/* Grid lines */}
+            {[0,0.25,0.5,0.75,1].map(pct => {
+              const y = pad.top + innerH * pct;
+              const wVal = chartData.maxY - (chartData.maxY - chartData.minY)*pct;
+              return (
+                <g key={pct}>
+                  <line x1={pad.left} y1={y} x2={pad.left+innerW} y2={y} stroke="#E5E7EB" strokeWidth=".8"/>
+                  <text x={pad.left-4} y={y+3} textAnchor="end" fontSize="9" fill="#6B7280">{wVal.toFixed(0)}</text>
+                </g>
+              );
+            })}
+            {/* Line */}
+            {sorted.length > 1 && (
+              <polyline points={chartData.points} fill="none" stroke="#4A7C6F" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+            )}
+            {/* Dots */}
+            {sorted.map((e,i) => {
+              const n = sorted.length;
+              const x = pad.left + (n===1 ? innerW/2 : (i/(n-1))*innerW);
+              const y = pad.top + innerH - ((e.weight - chartData.minY)/(chartData.maxY - chartData.minY))*innerH;
+              return <circle key={e.date} cx={x} cy={y} r="3.5" fill="#4A7C6F" stroke="white" strokeWidth="1.5"/>;
+            })}
+            {/* X labels */}
+            {chartData.xLabels && chartData.xLabels.map(({x,label}) => (
+              <text key={label} x={x} y={chartH-4} textAnchor="middle" fontSize="8" fill="#6B7280">{label}</text>
+            ))}
+            {/* Band labels */}
+            {chartData.midY1 !== undefined && (
+              <text x={pad.left+2} y={chartData.midY1-2} fontSize="7" fill="#4A7C6F" fontWeight="600">Meta Jul15</text>
+            )}
+            {chartData.cancunY1 !== undefined && (
+              <text x={pad.left+2} y={chartData.cancunY1-2} fontSize="7" fill="#3A6358" fontWeight="600">Cancún</text>
+            )}
+          </svg>
+        </Card>
+      )}
+
+      {/* Milestones */}
+      <div className="space-y-3 mb-4">
+        {[
+          { label:'Inicio', date:'19 may', weight:`${startWeight}kg`, bf:'25.5%', done:true },
+          { label:'Meta intermedia', date:'15 jul', weight:'88-90kg', bf:'20-22%', done:false },
+          { label:'Cancún 🏖️', date:'5 ago', weight:'84-87kg', bf:'17-19%', done:false },
+        ].map((m,i) => (
+          <div key={i} className={`flex items-center gap-3 p-3 rounded-2xl ${m.done ? 'bg-l-sage' : 'bg-cream2 dark:bg-navy2'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 ${m.done ? 'bg-sage text-cream' : 'bg-gray-100 dark:bg-navy text-ash'}`}>
+              {m.done ? '✓' : ['🎯','🏆'][i-1]}
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-navy dark:text-cream text-sm">{m.label}</p>
+              <p className="text-xs text-ash">{m.date} · {m.weight} · {m.bf}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* InBody reminder */}
+      <Card className="bg-amber border border-amber-b">
+        <div className="flex items-center gap-2">
+          <Icon name="scale" size={18} stroke="#92400E"/>
+          <div>
+            <p className="font-semibold text-yellow-800 text-sm">Próximo InBody</p>
+            <p className="text-xs text-yellow-700">En {daysToNextInBody} días · cada 4 semanas desde el 19 may</p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Weight log */}
+      {sorted.length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs font-semibold text-ash uppercase tracking-wide mb-2">Historial</p>
+          <Card>
+            {sorted.slice().reverse().slice(0,10).map(e => (
+              <div key={e.date} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-navy last:border-0">
+                <span className="text-xs text-ash">{e.date}</span>
+                <span className="font-mono font-bold text-navy dark:text-cream text-sm">{e.weight}kg</span>
+              </div>
+            ))}
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── APP ROOT ─────────────────────────────────────────────────────────────────
+
+function App() {
+  const [darkMode, setDarkMode] = useLS('darkMode', false);
+  const [tab, setTab] = useState(0);
+  const [meals, setMeals] = useLS('meals_today', { breakfast:false, lunch:false, snack:false, dinner:false });
+  const [water, setWater] = useLS('water_today', 0);
+  const [habits, setHabits] = useLS('habits_today', {});
+  const [training, setTraining] = useLS('training_today', { done:false, series:{} });
+  const [trackers, setTrackers] = useLS('trackers_today', { reading:0, podcast:0, study:0, steps:0 });
+  const [weightLog, setWeightLog] = useLS('weightLog', []);
+  const [todos, setTodos] = useLS('todos', []);
+
+  const history = useDailyReset(meals, setMeals, water, setWater, habits, setHabits, training, setTraining, trackers, setTrackers);
+
+  useEffect(() => {
+    if (darkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [darkMode]);
+
+  const pendingTodos = todos.filter(t => !t.done).length;
+  const act = getTodayActivity();
+
+  const tabs = [
+    { id:0, label:'Hoy', icon:'today' },
+    { id:1, label:'Entreno', icon:'dumbbell' },
+    { id:2, label:'Dieta', icon:'flame' },
+    { id:3, label:'Hábitos', icon:'spark' },
+    { id:4, label:'Todo', icon:'list', badge: pendingTodos > 0 ? pendingTodos : null },
+    { id:5, label:'Semana', icon:'calendar' },
+    { id:6, label:'Progreso', icon:'chart' },
+  ];
+
+  const screens = [
+    <TodayScreen key="hoy" meals={meals} setMeals={setMeals} water={water} setWater={setWater}
+      habits={habits} setHabits={setHabits} training={training} setTraining={setTraining} setTab={setTab}/>,
+    <WorkoutScreen key="entreno" training={training} setTraining={setTraining}/>,
+    <DietScreen key="dieta" meals={meals} setMeals={setMeals}/>,
+    <HabitsScreen key="habitos" habits={habits} setHabits={setHabits} trackers={trackers} setTrackers={setTrackers}
+      history={history} training={training} meals={meals} water={water}/>,
+    <TodoScreen key="todo" todos={todos} setTodos={setTodos}/>,
+    <WeekScreen key="semana" history={history} meals={meals} water={water} habits={habits} training={training} trackers={trackers}/>,
+    <ProgressScreen key="progreso" weightLog={weightLog} setWeightLog={setWeightLog}/>,
+  ];
+
+  return (
+    <div className="min-h-screen bg-cream dark:bg-navy transition-colors duration-300">
+      <div className="max-w-md mx-auto relative min-h-screen">
+
+        {/* Dark mode toggle */}
+        <button onClick={() => setDarkMode(d => !d)}
+          className="fixed top-4 right-4 z-20 w-9 h-9 rounded-full bg-cream2 dark:bg-navy2 shadow flex items-center justify-center active:scale-90 transition-transform max-w-md"
+          style={{right:'calc(50% - 210px + 16px)', maxWidth:'calc(100vw - 32px)'}}>
+          <Icon name={darkMode ? 'sun' : 'moon'} size={16} stroke={darkMode?'#F2D98A':'#1A2332'}/>
+        </button>
+
+        {/* Screen */}
+        <div className="overflow-y-auto" style={{paddingTop:'0px',minHeight:'100vh'}}>
+          {screens[tab]}
+        </div>
+
+        {/* Bottom nav */}
+        <nav className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-navy/95 backdrop-blur-md border-t border-gray-100 dark:border-navy2 safe-pb z-20" style={{maxWidth:'448px',margin:'0 auto',left:'50%',transform:'translateX(-50%)'}}>
+          <div className="flex">
+            {tabs.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-all active:scale-90 relative ${tab===t.id ? 'text-sage' : 'text-ash'}`}>
+                <div className="relative">
+                  <Icon name={t.icon} size={20} stroke={tab===t.id?'#4A7C6F':'#6B7280'}/>
+                  {t.badge && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center font-bold leading-none" style={{fontSize:'9px'}}>
+                      {t.badge > 9 ? '9+' : t.badge}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs font-medium">{t.label}</span>
+                {tab===t.id && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-sage rounded-full"/>}
+              </button>
+            ))}
+          </div>
+        </nav>
+
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
